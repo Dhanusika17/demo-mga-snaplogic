@@ -12,21 +12,32 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Install unzip
-      run: sudo apt-get install unzip
+      - name: Set environment variables
+        run: |
+          echo "ORG=${{ secrets.SNAP_ORG }}" >> $GITHUB_ENV
+          echo "BASE_URL=${{ secrets.SNAP_BASE_URL }}" >> $GITHUB_ENV
+          echo "USERNAME=${{ secrets.SNAP_USERNAME }}" >> $GITHUB_ENV
+          echo "PASSWORD=${{ secrets.SNAP_PASSWORD }}" >> $GITHUB_ENV
 
-    - name: Extract SnapLogic project export
-      run: |
-        mkdir export
-        unzip snaplogic/Mulecraft_Demo-mga-dev.zip -d export
+      - name: Determine Project Path Based on Branch
+        run: |
+          if [ "${GITHUB_REF##*/}" == "dev" ]; then
+            echo "PROJECT_PATH=${{ secrets.DEV_PROJECT_PATH }}" >> $GITHUB_ENV
+            echo "ZIP_FILE=snaplogic/Mulecraft_Demo-mga-dev.zip" >> $GITHUB_ENV
+          elif [ "${GITHUB_REF##*/}" == "qa" ]; then
+            echo "PROJECT_PATH=${{ secrets.QA_PROJECT_PATH }}" >> $GITHUB_ENV
+            echo "ZIP_FILE=snaplogic/Mulecraft_Demo-mga-qa.zip" >> $GITHUB_ENV
+          else
+            echo "PROJECT_PATH=${{ secrets.PROD_PROJECT_PATH }}" >> $GITHUB_ENV
+            echo "ZIP_FILE=snaplogic/Mulecraft_Demo-mga-prod.zip" >> $GITHUB_ENV
+          fi
 
-    - name: Deploy to SnapLogic
-      run: |
-        curl -u "${{ secrets.SNAP_USERNAME }}:${{ secrets.SNAP_PASSWORD }}" \
-        -X POST \
-        -H "Content-Type: application/json" \
-        -d @export/project.json \
-        "${{ secrets.SNAP_BASE_URL }}/api/1/rest/public/runtime/project/${{ secrets.SNAP_PROJECT }}"
+      - name: Upload Project to SnapLogic
+        run: |
+          curl -X POST "$BASE_URL/api/1/rest/asset/upload/$ORG/projects/$PROJECT_PATH" \
+          -u "$USERNAME:$PASSWORD" \
+          -H "Accept: application/json" \
+          -F "file=@$ZIP_FILE"
